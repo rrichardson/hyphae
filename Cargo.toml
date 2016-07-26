@@ -1,0 +1,11 @@
+[package]
+name = "hyphae"
+version = "0.1.0"
+authors = ["Rick Richardson <rick.richardson@gmail.com>"]
+
+[dependencies]
+block_allocator = "*"
+appendbuf = "*"
+mio = "*"
+bytes = "*"
+tokio = "*"
