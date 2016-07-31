@@ -1,3 +1,7 @@
+
+extern crate appendbuf;
+extern crate block_allocator;
+
 #[cfg(test)]
 mod tests {
     #[test]

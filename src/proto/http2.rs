@@ -5,6 +5,38 @@
 
 
 use nom::IResult;
+use block_allocator::Allocator;
+use std::collections::LinkedList;
+
+pub enum Http2Event {
+    Headers,
+    PushPromise,
+    Settings,
+    Data,
+    Continuation,
+    Preface,
+    EndStream,
+    Idle
+}
+
+enum Http2State {
+        Init
+        Idle,
+        HalfOpenLocal,
+        HalfOpenRemote,
+        ReserveRemote,
+        ReserveLocal,
+        Open,
+        HalfClosedLocal,
+        HalfClosedRemote,
+        Closed
+}
+
+enum ProtoError {
+    ParseIncomplete<u32>
+}
+
+type ProtoResult<T> = std::Result<T, ProtoError>;
 
 ///
 /// State machines and parsers for the http2 protocol
@@ -23,8 +55,8 @@ use nom::IResult;
 //a preface for the very first connection, for all subsequently
 //created streams, the constructor of the stream will issue the
 //idle() event
-microstate! {
-    ClientStream { Init };
+microstate_ext! {
+    ClientStreamState { Init, Http2State };
 
     states {
         Init
@@ -92,8 +124,8 @@ microstate! {
 //a preface for the very first connection, for all subsequently
 //created streams, the constructor of the stream will issue the
 //idle() event
-microstate! {
-    ServerStream { Init };
+microstate_ext! {
+    ServerStreamState { Init, Http2State };
 
     states {
         Init,
@@ -150,7 +182,7 @@ microstate! {
 
 
 microstate! {
-    Http2Parser { Init };
+    ParserState { Init };
     states {
         Init, AwaitFrameHeader, AwaitHeader, AwaitFrame, Closed
     }
@@ -176,3 +208,50 @@ microstate! {
         AwaitFrame => Closed
     }
 }
+
+trait Http2StateMachine {
+    fn advance(evt : Http2Event) -> Http2State {
+    }
+}
+
+struct ClientStreamSM {
+   state : ClientStreamState 
+}
+
+struct ServerStreamSM {
+    state : ServerStreamState
+}
+
+impl Http2StateMachine ClientStreamSM {
+    fn advance(evt : Http2Event) -> Http2State {
+    }
+}
+
+impl Http2StateMachine for ServerStreamSM {
+    fn advance(evt : Http2Event) -> Http2State {
+    }
+}
+
+struct Stream<'a, SM : Http2StateMachine> {
+    stream_state : SM,
+    parser_state : ParserState,
+    buf_chain : LinkedList<&'a [u8]>
+}
+
+impl<'a, SM : Http2StateMachine> Stream<'a, SM> {
+    
+    pub fn new_client() -> ProtoResult<Stream<ClientStreamSM> {
+    }
+
+    pub fn new_server() -> Stream<ClientStreamSM> {
+    }
+
+    pub fn parse(&mut self, buf : AppendBuf) -> ProtoResult<Http2Event> {
+
+    }
+
+    pub fn create(&mut self, frame : Http2Event) -> ProtoResult<(AppendBuf, Http2Event)> {
+
+    }
+}
+
