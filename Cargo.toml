@@ -9,4 +9,4 @@ appendbuf = "*"
 mio = "*"
 bytes = "*"
 tokio = "*"
-microstate = "~1.0"
+microstate = { git = "https://github.com/rrichardson/microstate" }

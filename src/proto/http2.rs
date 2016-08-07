@@ -8,11 +8,12 @@ use nom::IResult;
 use block_allocator::Allocator;
 use std::collections::LinkedList;
 
+#[derive(Copy, Clone)]
 pub enum Http2Event {
+    Data,
     Headers,
     PushPromise,
     Settings,
-    Data,
     Continuation,
     Preface,
     EndStream,
@@ -20,20 +21,94 @@ pub enum Http2Event {
 }
 
 enum Http2State {
-        Init
-        Idle,
-        HalfOpenLocal,
-        HalfOpenRemote,
-        ReserveRemote,
-        ReserveLocal,
-        Open,
-        HalfClosedLocal,
-        HalfClosedRemote,
-        Closed
+    Init
+    Idle,
+    HalfOpenLocal,
+    HalfOpenRemote,
+    ReserveRemote,
+    ReserveLocal,
+    Open,
+    HalfClosedLocal,
+    HalfClosedRemote,
+    Closed
 }
 
 enum ProtoError {
     ParseIncomplete<u32>
+}
+
+enum FrameCode {
+    Data = 0x0,
+    Headers = 0x1,
+    Priority = 0x2,
+    RstStream = 0x3,
+    Settings = 0x4,
+    PushPromise = 0x5,
+    Ping = 0x6,
+    GoAway = 0x7,
+    WindowUpdate = 0x8
+}
+
+enum ErrorCode {
+   NoError = 0x0,
+    /* *The associated condition is not as a result of an
+     * error.  For example, a GOAWAY might include this code to indicate
+     * graceful shutdown of a connection.  */
+
+   ProtocolError = 0x1, 
+    /* The endpoint detected an unspecific protocol
+     * error.  This error is for use when a more specific error code is
+     * not available.  */
+
+   InternalError = 0x2,
+   /* The endpoint encountered an unexpected
+    * internal error.  */
+
+   FlowControlError = 0x3,
+   /*  The endpoint detected that its peer
+    *  violated the flow control protocol.*/
+
+   SettingsTimeout = 0x4,
+   /*  The endpoint sent a SETTINGS frame, but did
+    *  not receive a response in a timely manner.  See Settings
+    *  Synchronization (Section 6.5.3). */
+
+   StreamClosed = 0x5,
+   /* The endpoint received a frame after a stream
+      was half closed.  */
+
+   FrameSizeError = 0x6,
+   /* The endpoint received a frame with an
+    *  invalid size.  */
+
+   RefusedStream = 0x7, 
+   /*  The endpoint refuses the stream prior to
+    *  performing any application processing, see Section 8.1.4 for
+    *  details.  */
+
+   Cancel = 0x8, 
+   /*  Used by the endpoint to indicate that the stream is no
+    *  longer needed.  */
+
+   CompressionError = 0x9,
+   /*  The endpoint is unable to maintain the
+    *  header compression context for the connection.  */
+
+   ConnectError = 0xa,
+   /*  The connection established in response to a
+    *  CONNECT request (Section 8.3) was reset or abnormally closed.  */
+
+   EnhanceYourCalm = 0xb,
+   /* The endpoint detected that its peer is
+    *  exhibiting a behavior that might be generating excessive load.  */
+
+   InadequateSecurity = 0xc,
+   /*The underlying transport has properties
+    *  that do not meet minimum security requirements (see Section 9.2).  */
+
+   HTTP11Required = 0xd,
+   /*The endpoint requires that HTTP/1.1 be used
+    *  instead of HTTP/2.*/
 }
 
 type ProtoResult<T> = std::Result<T, ProtoError>;
@@ -58,17 +133,6 @@ type ProtoResult<T> = std::Result<T, ProtoError>;
 microstate_ext! {
     ClientStreamState { Init, Http2State };
 
-    states {
-        Init
-        Idle,
-        HalfOpenLocal,
-        ReserveRemote,
-        Open,
-        HalfClosedLocal,
-        HalfClosedRemote,
-        Closed
-    }
-    
     preface_send {
         Init => HalfOpenLocal
     }
@@ -126,17 +190,6 @@ microstate_ext! {
 //idle() event
 microstate_ext! {
     ServerStreamState { Init, Http2State };
-
-    states {
-        Init,
-        HalfOpenRemote,
-        Idle,
-        ReservedLocal,
-        Open,
-        HalfClosedLocal,
-        HalfClosedRemote,
-        Closed
-    }
 
     idle {
         Init => Idle
@@ -210,8 +263,7 @@ microstate! {
 }
 
 trait Http2StateMachine {
-    fn advance(evt : Http2Event) -> Http2State {
-    }
+    fn advance(evt : Http2Event) -> Http2State;
 }
 
 struct ClientStreamSM {
@@ -222,7 +274,7 @@ struct ServerStreamSM {
     state : ServerStreamState
 }
 
-impl Http2StateMachine ClientStreamSM {
+impl Http2StateMachine for ClientStreamSM {
     fn advance(evt : Http2Event) -> Http2State {
     }
 }
@@ -232,18 +284,21 @@ impl Http2StateMachine for ServerStreamSM {
     }
 }
 
-struct Stream<'a, SM : Http2StateMachine> {
+pub struct Stream<'a, SM : Http2StateMachine> {
+    in_chain : LinkedList<AppendBuf>,
+    out_chain : LinkedList<AppendBuf>,
     stream_state : SM,
     parser_state : ParserState,
-    buf_chain : LinkedList<&'a [u8]>
+    buf_chain : LinkedList<&'a AppendBuf<'a>>
+    flow_credit : usize
 }
 
 impl<'a, SM : Http2StateMachine> Stream<'a, SM> {
     
-    pub fn new_client() -> ProtoResult<Stream<ClientStreamSM> {
+    pub fn new_client() -> ProtoResult<Stream<ClientStreamSM>> {
     }
 
-    pub fn new_server() -> Stream<ClientStreamSM> {
+    pub fn new_server() -> ProtoResult<Stream<ServerStreamSM>> {
     }
 
     pub fn parse(&mut self, buf : AppendBuf) -> ProtoResult<Http2Event> {

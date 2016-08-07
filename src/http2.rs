@@ -3,15 +3,16 @@ use tokio::rt::{Dispatch, NewDispatch, Server, Reactor, EventLoop};
 use tokio::io::{Transport};
 use tokio::rt::server;
 use std::collections::{HashMap, LinkedList};
+use std::vec::Vec;
 use block_alloc_appendbuf::AppendBuf;
 use http2_proto::Http2Proto;
 
-struct Http2Connection {
+struct Http2Connection<'a> {
     machine : Http2Proto;
     conn : TcpStream,
-    in_chain : LinkedList<AppendBuf>,
-    out_chain : LinkedList<AppendBuf>,
-    alloc : Allocator,
+    streams : Vec<Stream<'a>>,
+    alloc : Allocator<'a>,
+    flow_credit : usize,
     on_new_conn   : Option<EventCallback>,
     on_new_stream : Option<EventCallback>,
     on_data_frame      : Option<DataCallback>,
